@@ -1,0 +1,301 @@
+% This must be in the first 5 lines to tell arXiv to use pdfLaTeX, which is strongly recommended.
+\pdfoutput=1
+% In particular, the hyperref package requires pdfLaTeX in order to break URLs across lines.
+
+\documentclass[11pt]{article}
+\usepackage{authblk}
+% Remove the "review" option to generate the final version.
+\usepackage{ACL2023}
+
+% Standard package includes
+\usepackage{times}
+\usepackage{latexsym}
+
+% For proper rendering and hyphenation of words containing Latin characters (including in bib files)
+\usepackage[T1]{fontenc}
+% For Vietnamese characters
+% \usepackage[T5]{fontenc}
+% See https://www.latex-project.org/help/documentation/encguide.pdf for other character sets
+
+% This assumes your files are encoded as UTF8
+\usepackage[utf8]{inputenc}
+
+% This is not strictly necessary, and may be commented out.
+% However, it will improve the layout of the manuscript,
+% and will typically save some space.
+\usepackage{microtype}
+
+% This is also not strictly necessary, and may be commented out.
+% However, it will improve the aesthetics of text in
+% the typewriter font.
+\usepackage{inconsolata}
+
+\usepackage{booktabs}
+\usepackage{graphicx}
+
+
+% If the title and author information does not fit in the area allocated, uncomment the following
+%
+%\setlength\titlebox{<dim>}
+%
+% and set <dim> to something 5cm or larger.
+
+\title{Auto-patching: Enhancing Multi-Hop Reasoning in Language Models}
+
+% \author{Dean Tahory \\ \small\texttt{deantahory@mail.tau.ac.il} \\
+%  %319045837 \\ 
+%  \And
+%   Omer Talmi \\ \small\texttt{omertalmi@mail.tau.ac.il}
+%   %\\ 318900883 
+%   \And
+%   Omar Abo Mokh \\ \small\texttt{omarabomokh@mail.tau.ac.il} 
+%   %\\ 207154295 
+%   \And
+%   Aviv Jan \\ \small\texttt{avivjan@mail.tau.ac.il} 
+%   %\\319127981 
+%   }
+
+\author{\textbf{Dean Tahory}}
+\author{\textbf{\;Omer Talmi}}
+\author{\textbf{\;Omar Abo Mokh}}
+\author{\textbf{\;Aviv Jan}}
+
+\affil{Tel Aviv University}
+\affil{\tt\small \{deantahory, omertalmi, omarabomokh, avivjan\}@mail.tau.ac.il}
+
+
+  
+\begin{document}
+\maketitle
+
+\begin{abstract}
+
+    In recent years, large language models (LLMs) have demonstrated significant advances in natural language understanding and generation. However, these models often struggle with complex reasoning tasks, particularly those involving multi-hop questions that require linking multiple pieces of information. In this paper, we introduce the Auto Patch method, a novel approach that leverages dynamic hidden state patching to enhance the multi-hop reasoning capabilities of the LLaMA 2 model. Using the PatchScopes framework, Auto Patch dynamically adjusts the model's hidden states during inference to improve the model's ability to synthesize information across different steps. We evaluated our method on the MuSiQue dataset, focusing on 2-hop questions, and compared its performance against baseline and Chain-of-Thought (CoT) prompting methods. The results show that Auto Patch significantly outperforms the baseline, achieving an solve rate of 23.63\%, compared to 18.45\% for the baseline. Although it did not surpass the CoT method, which achieved 27.44\%, Auto Patch offers a promising direction for further enhancing the reasoning capabilities of LLMs. Our findings highlight the potential of dynamic hidden state manipulation for improving model performance on complex reasoning tasks and suggest avenues for future research.
+    
+\end{abstract}
+
+\footnotetext[3]{Code is publicly available at \url{https://github.com/omertalmi5/Auto-Patching}.}
+
+
+\section{Introduction}
+
+\begin{figure}[!ht]
+    \centering
+    \includegraphics[width=\columnwidth]{figures/autopatch.pdf}
+    \vspace{-.5cm}
+    \caption{Illustration of the Auto Patch framework used for enhancing multi-hop reasoning in language models. The process involves the following steps:
+    \textbf{Step~1}: Select the hidden state from the source layer that will be considered for patching.
+    \textbf{Step~2}: The SVM classifier evaluates whether the selected hidden state should be patched.
+    \textbf{Step~3}: If patching is needed, the hidden state is transferred to the same position in the target layer.
+    \textbf{Step~4}: Execute the forward pass on the patched target, incorporating the patched hidden state into the final output generation. This dynamic adjustment improves the model's ability to reason across multiple steps.}
+    \label{fig:autopatch}
+\end{figure}
+
+
+The field of natural language processing (NLP) has been profoundly transformed by the advent of large language models (LLMs) such as BERT \cite{devlin2019bert}, GPT-3 \cite{brown2020language}, and LLaMA \cite{touvron2023llama}. These models have set new benchmarks across a variety of tasks, significantly improving our ability to understand and generate human language. Despite these advancements, LLMs continue to face challenges in handling complex reasoning tasks, especially multi-hop questions, which require synthesizing information from multiple sources to arrive at a correct answer.
+
+Multi-hop reasoning involves answering questions that necessitate linking disparate pieces of information across different segments. For instance, a question might require first identifying a piece of data and then using that information to find the final answer. Traditional approaches to improving LLMs' performance on such tasks include:
+
+\begin{enumerate}
+    \item \textbf{Chain-of-Thought (CoT) Prompting}: This method guides the model to generate explicit intermediate reasoning steps. CoT prompting helps break down complex problems into manageable steps, which significantly enhances performance on tasks like arithmetic and commonsense reasoning. However, CoT often demands extensive fine-tuning and precise prompt engineering, which can be computationally expensive and may not generalize well without considerable manual effort \cite{wei2023chainofthought}, \cite{zhang2022automatic}.
+    
+    \item \textbf{Memory-Augmented Networks}: These networks integrate external memory to store and retrieve information across multiple hops. While they are effective in handling complex reasoning by leveraging stored data, managing this memory efficiently can be challenging. The added computational overhead and complexity can limit their scalability and overall performance \cite{wang-etal-2023-towards}.
+    
+    \item \textbf{Graph-Based Approaches}: These methods use graph neural networks to represent and reason over relationships in the question and relevant information. Graph-based approaches excel in capturing relationships between entities and steps in multi-hop questions. Nevertheless, they are often difficult to scale and seamlessly integrate with LLMs, requiring specialized infrastructure and significant computational resources \cite{de-cao-etal-2019-question}.
+\end{enumerate}
+
+Despite their success, these methods come with limitations such as increased computational demands, complexity in implementation, and sometimes only modest performance gains. This study explores how the reasoning capabilities of LLMs can be enhanced through a novel approach inspired by PatchScopes \cite{ghandeharioun2024patchscopes}. PatchScopes is a modular framework that allows for inspecting and manipulating hidden states in language models. By "patching" or adjusting these hidden states during the model's computation, PatchScopes can refine internal representations and improve reasoning capabilities.
+
+\subsection*{Objective}
+In this paper, we aim to enhance the performance of the LLaMA 2 model (7B version) on 2-hop question answering tasks. Leveraging the PatchScopes framework, we introduce the Auto Patch method, which dynamically adjusts hidden states during the model's inference process. Our objective is to improve the model's ability to effectively connect information across multiple reasoning steps.
+
+\subsection*{Contribution}
+We present a novel approach that utilizes a classifier to determine which hidden states should be patched to enhance the model’s performance. By selectively patching these states, we achieved significant improvements over the baseline in handling 2-hop questions. This research underscores the practical application of dynamic hidden state manipulation via PatchScopes, providing insights into optimizing LLM performance and advancing model interpretability.
+
+\section{Related Work}
+
+\subsection*{Mechanistic Interpretability}
+
+Mechanistic interpretability (MI) aims to unravel complex machine learning models by reverse engineering their internal mechanisms into human-understandable algorithms \cite{geiger2022inducing, olah2020building}. Understanding these mechanisms allows us to better identify and fix model errors \cite{vig2020causal}, steer model outputs \cite{li2023inferencetime}, and explain emergent behaviors \cite{matton2019emergent, barak2022emergent}. Our work builds on the MI framework by applying dynamic hidden state adjustments, which are informed by the insights gained from model interpretability, to enhance reasoning capabilities.
+
+\subsection*{Activation Patching and Causal Tracing}
+
+Activation patching, also known as causal tracing or interchange intervention, is a pivotal technique in MI that helps localize important components within models by intervening on their activations. This method involves modifying specific parts of a model's computation while observing the effect on the output, thus identifying which parts are crucial for certain decisions \cite{vig2020causal, meng2022locating}. Common approaches include replacing activations of a corrupted input with those from a clean input and measuring the change in performance \cite{ghandeharioun2024patchscopes}. This technique has been extensively used to understand how models store and process factual information and to uncover the computational circuits responsible for specific tasks \cite{geva2023dissecting}.
+
+\subsection*{Multi-Hop Reasoning in Language Models}
+
+Multi-hop reasoning requires models to synthesize information from multiple steps or data points to answer a query. This is challenging for large language models (LLMs) as it demands maintaining a coherent logical flow throughout the reasoning process. Approaches to address these challenges include:
+
+\begin{enumerate}
+    \item \textbf{Chain-of-Thought (CoT) Prompting}: This technique encourages models to explicitly articulate intermediate reasoning steps, which can significantly improve their performance on tasks requiring structured thinking \cite{wei2023chainofthought, zhang2022automatic}. CoT prompting is particularly effective for complex, multi-step problems but often requires substantial fine-tuning and careful prompt design.
+    
+    \item \textbf{Memory-Augmented Networks}: These networks utilize external memory to store and retrieve relevant information across multiple reasoning steps. While effective, integrating memory modules adds complexity and computational overhead, which can hinder scalability \cite{wang-etal-2023-towards}.
+    
+    \item \textbf{Graph-Based Approaches}: Graph neural networks (GNNs) model relationships between entities and reasoning steps, excelling in capturing relational data. However, their computational demands and need for specialized infrastructure can make them difficult to scale and integrate with LLMs \cite{decao2019question}.
+\end{enumerate}
+
+Despite their strengths, these methods can be limited by their complexity and resource demands. Our Auto Patch method simplifies the enhancement of multi-hop reasoning by dynamically adjusting hidden states during inference, providing a scalable and efficient solution.
+
+\subsection*{Advancing Patchscopes with Auto Patch}
+
+Patchscopes provide a framework for inspecting and intervening on hidden states within LLMs, allowing researchers to refine model behaviors and improve reasoning capabilities. This method has shown promise in correcting errors and enhancing interpretability by directly manipulating the model's internal representations during computation \cite{ghandeharioun2024patchscopes}. However, traditional Patchscopes often require manual separation of prompts into their components, making them less practical for real-world applications.
+
+Our work extends Patchscopes by automating the patching process through the Auto Patch method. By using classifiers to dynamically determine which hidden states to patch, Auto Patch simplifies the intervention process, making it more suitable for practical deployment. This automated approach enhances the scalability and efficiency of hidden state adjustments during inference, providing a robust solution for multi-hop reasoning tasks in LLMs.
+
+
+
+\section{Methodology}
+This section details the improved methods used to enhance the multi-hop reasoning abilities of the LLaMA 2 model by integrating an automated patching process within the PatchScopes framework. Our approach removes the need for manually separating prompts into components, making it more practical for real-world use.
+
+\subsection{Advancing PatchScopes with Auto Patch}
+PatchScopes is a key framework for exploring and adjusting hidden states within large language models (LLMs), helping to refine model behaviors and improve reasoning capabilities. Although promising, traditional PatchScopes often require extensive manual work, which limits their use outside of research settings. Our development extends this framework through the Auto Patch method, which uses classifiers to automatically decide which hidden states to patch. This not only makes the patching process easier but also makes the model more scalable and efficient, especially in complex multi-hop reasoning tasks. The main idea behind our method is that the decision to apply a patch can be effectively learned and optimized, thus improving the model’s accuracy and functionality.
+
+\subsection{Data Collection and Preprocessing}
+To prepare our dataset for evaluating multi-hop reasoning capabilities, we followed a systematic process with each multi-hop question from the MuSiQue dataset:
+\begin{enumerate}
+    \item \textbf{Initial Model Run:} We first ran the model using each prompt to record all hidden states at a specific layer.
+    \item \textbf{Patching Hidden States:} Subsequently, we conducted another model run where we patched selected hidden states into earlier layers.
+    \item \textbf{Performance Analysis:} We then carefully analyzed how each patch affected the model’s solve rate.
+    \item \textbf{Data Recording:} For each prompt, we recorded the original hidden state, the prompt itself, the layer involved, and the observed improvement in solve rate.
+\end{enumerate}
+Each entry in our dataset thus includes comprehensive details that provide a solid foundation for the further training of our classifier, ensuring a systematic approach to data collection and preprocessing.
+
+\subsection{Classifier Training for Auto Patching}
+To support the automatic patching process, we trained a Support Vector Machine (SVM) classifier using a specific kernel to improve decision-making. Training involved extracting features from interactions between various layers, where hidden states from higher layers were experimentally replaced with those from lower layers to measure their impact on performance. This method allowed us to train the SVM classifier effectively, enabling it to dynamically determine the best positions for patching during model inference, thus removing the need for manual layer specification and focusing on enhancing reasoning through learned interventions.
+
+\subsection{Auto Patching Framework Implementation}
+At the heart of our methodology, the Auto Patching Framework dramatically changes how hidden states are manipulated during model inference. Initially, the model processes the prompt through a standard forward pass to capture the baseline hidden states. These states are then evaluated by the trained classifier to decide if and where patches are needed. If patching is beneficial, the model undergoes a second forward pass where selected hidden states are adjusted as recommended by the classifier. This dual-phase operation not only maintains the necessary context for accurate multi-hop reasoning but also adds a dynamic, learnable element to hidden state manipulation, greatly improving the model's performance on various prompts.
+
+To enable this process, we developed specific patching code that started with manual patching to gain initial insights into the strategic manipulation of hidden states. This phase was crucial for determining the impactful interactions between layers and setting the groundwork for automated interventions.
+
+Following these initial insights, we progressed to automating the patching process. The decision-making capabilities of our SVM classifier were seamlessly integrated into the model’s inference engine, enabling dynamic and automatic patching during the question-answering process. This integration ensures that the model can adjust hidden states in real-time, based on classifier predictions, optimizing performance without the need for manual intervention.
+
+This comprehensive development and integration of patching code into the Auto Patching Framework not only streamlines the entire process but also enhances the model’s ability to handle complex reasoning tasks more efficiently.
+
+
+\section{Experiments}
+
+This section presents the experiments conducted to evaluate the effectiveness of our Auto Patch method. We provide a detailed description of the experimental setup, evaluation metrics, dataset characteristics, results, and comparative analysis with baseline and Chain-of-Thought (CoT) methods.
+
+\subsection{Evaluation Metrics}
+
+To evaluate the performance of our method, we utilized solve rate metric:
+
+\begin{itemize}
+    \item \textbf{Solve Rate}: The primary metric was the solve rate, defined as the proportion of correctly answered 2-hop questions out of the total questions.
+\end{itemize}
+
+\subsection{Dataset Description}
+Our dataset contains 24,912 samples created from 1,024 prompts, each representing a different execution of the Patchcopes method with patching from and to specific positions. For each prompt, we executed from source layer 15 to target layer 8, for each position in the prompt. The main features of each sample are: 'prompt\_source' and 'prompt\_target', the same and consist of a full two-hop question; 'position\_source' and 'position\_target', the same position that from and to; 'hop3', the correct answer to the two-hop question; 'generations\_patched', the LLM's response to the two-hop question; 'is\_correct\_patched', a boolean value indicating if the LLM generated the correct answer; and 'hidden\_rep', the hidden state patched during execution, represented as a float array of length 4096. 'hidden\_rep' is the input for the classifier, and 'is\_correct\_patched' is the label.
+23\% of the samples have 'is\_correct\_patched' as true. This does not mean that the solve rate is 23\%, because long prompts occur in more samples.
+
+
+\subsection{The Experiment Flow}
+We receive 1,024 two-hop questions without any separation into hops. We pass them through the first inference in the LLM. Then, each hidden state from layer 15 passes through the classifier. If the classifier returns true, in the second inference, we replace it with the hidden state in the same position in layer 8. We then complete the second inference and check if it returns the correct answer.
+
+
+\subsection{Results and Analysis}
+
+The results of our experiments demonstrate the impact of the Auto Patch method on model performance compared to the baseline and Chain-of-Thought (CoT) methods. Table~\ref{tab:results} summarizes the solve rate of each approach on the 2-hop questions from the MuSiQue dataset.
+
+\begin{table}[h!]
+    \centering
+    \resizebox{\columnwidth}{!}{
+        \begin{tabular}{|c|c|}
+            \hline
+            \textbf{Method} & \textbf{Solve Rate (\%)} \\
+            \hline
+            Baseline (LLaMA 2) & 18.45 \\
+            \hline
+            Chain-of-Thought (CoT) & 27.44 \\
+            \hline
+            Auto Patch (Ours) & 23.63 \\
+            \hline
+        \end{tabular}
+    }
+    \caption{Comparison of solve rate on MuSiQue 2-hop questions.}
+    \label{tab:results}
+\end{table}
+
+\textbf{Auto Patch (Ours):} Our Auto Patch method achieved a solve rate of 23.63\%, significantly outperforming the baseline but not surpassing the CoT method.
+
+To determine optimal positions for patching, we employed an SVM classifier from the sklearn library, utilizing a Radial Basis Function (RBF) kernel. Given the imbalanced nature of the dataset, we applied the SMOTETomek method for balancing, which involved both sampling and generating the minority class. Standardization was also part of the preprocessing to enhance the classifier's performance.
+
+The classifier achieved an accuracy of 0.81. Table~\ref{tab:svm_report} provides a detailed classification report for the SVM classifier's performance at the source layer (layer 15).
+
+\begin{table}[h!]
+    \centering
+    \resizebox{\columnwidth}{!}{
+        \begin{tabular}{lcccc}
+            \toprule
+            \textbf{} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-Score} & \textbf{Support} \\
+            \midrule
+            False & 0.84 & 0.92 & 0.88 & 3808 \\
+            True & 0.64 & 0.45 & 0.53 & 1175 \\
+            \midrule
+            \textbf{Accuracy} & \multicolumn{4}{c}{0.81} \\
+            \textbf{Macro Avg} & 0.74 & 0.69 & 0.70 & 4983 \\
+            \textbf{Weighted Avg} & 0.80 & 0.81 & 0.80 & 4983 \\
+            \bottomrule
+        \end{tabular}
+    }
+    \caption{Classification Report for the classifier}
+    \label{tab:svm_report}
+\end{table}
+
+As shown in Table~\ref{tab:svm_report}, The accuracy of the classifier was 0.81. While the overall precision and recall on the data after the preprocessing suggest acceptable performance. The classifier performed with high precision and recall for the 'False' class compared to the 'True' class, the majority class ('False') is predicted more accurately. On the real data, the model predicts \textit{True} for almost all positions. All samples have one or two positions that are not patched. Of these, 21.5\% are zero and the rest are distributed uniformly, as shown in Figure 1.
+\begin{figure}
+    \centering
+    \includegraphics[width=0.5\linewidth]{position_histogram.png}
+    \caption{Histogram showing the amount of patching by position number.}
+    \label{fig:enter-label}
+\end{figure}
+
+\subsection{Discussion}
+The effectiveness of the Auto Patch method can be attributed to several key factors that enhance the multi-hop reasoning capabilities of large language models (LLMs).
+
+\paragraph{Intuition Behind Patching} The Auto Patch method uses dynamic hidden state patching to reintroduce and modify information at specific layers during inference. This process refines the model’s understanding, maintaining coherence and context across reasoning steps of the different hopes. It allows the model to link separate pieces of information, which is essential for multi-hop reasoning tasks.
+
+\paragraph{Increased Computational Utilization} Similar to Chain-of-Thought (CoT) prompting, which utilizes more compute by guiding the model through intermediate reasoning steps, the Auto Patch method enhances computational engagement. By dynamically adjusting hidden states, the method directs computational resources towards synthesizing complex, multi-step information, improving accuracy and depth of reasoning.
+
+\paragraph{Classifier's Role in Effective Patching} The integration of a Support Vector Machine (SVM) classifier is crucial in determining when and where patches should be applied. The classifier identifies scenarios where patching hidden states is most beneficial, allowing dynamic adaptation and improvement of internal representations. This showcases a learned strategy for enhancing multi-hop reasoning.
+
+\paragraph{Comparison with Random Classification} The classifier’s effectiveness is highlighted by its performance compared to a random classification baseline. The random classification serves as a control, demonstrating that the observed improvements are due to the targeted, learned patching strategy rather than arbitrary interventions. This comparison underscores the classifier's role as a learned, intelligent component in the Auto Patch framework.
+
+\paragraph{Optimal Layer Selection for Patching} The selection of layers for patching, particularly transferring information from higher (15th) to lower (8th) layers, aligns with the intuition that early layers capture more generalized, foundational knowledge. These layers encode broad representations crucial for maintaining context in multi-hop reasoning. Strategic injection of refined information into these early stages enhances the model's ability to integrate complex information, improving performance on multi-hop questions.
+
+Overall, the Auto Patch method's design and execution reflect a sophisticated approach to leveraging dynamic hidden state manipulation to bolster LLMs' reasoning capabilities. The combination of learned patching strategies and targeted computational enhancements offers a promising direction for advancing multi-hop reasoning in language models.
+
+\subsection{Unsuccessful Experiments}
+In the course of developing and evaluating the Auto Patch method, several experiments did not yield the anticipated improvements. These insights are crucial for guiding future research and refining our approach.
+
+\paragraph{Positional Patch Adjustments} One explored avenue was concatenating the position number to the hidden state that was fed to the classifier. The hypothesis was that the position number might add information to the classifier about the structure of the sentence. However, these experiments showed the same results. The suggestion is that the hidden states in LLaMA2 already incorporate positional information through the initial addition of position embeddings to the token embeddings. This integration means that the positional context is inherently preserved in the hidden states, rendering the explicit addition of position numbers unnecessary for the classifier.
+
+\paragraph{Random Classification} To validate the necessity and effectiveness of the learned classifier, experiments were conducted where hidden states were patched based on random classification. This approach served as a control against the SVM classifier's performance. Results from random patches were sporadic and did not yield meaningful improvements in solve rates. This outcome confirms the importance of the classifier’s learned decision-making in identifying beneficial patching opportunities, emphasizing that targeted, informed interventions are essential for optimizing multi-hop reasoning.
+
+These unsuccessful experiments underscore the complexity of dynamic hidden state manipulation and highlight the need for strategic, informed decision-making processes to enhance LLM performance.
+
+
+\section{Conclusion}
+In this paper, we introduced the Auto Patch method, designed to enhance multi-hop reasoning in large language models by dynamically adjusting hidden states. Our results on the MuSiQue dataset show improved performance on 2-hop questions.
+
+Despite these improvements, the method has limitations. The current classifier's focus on isolated hidden states overlooks broader context. Future work could explore context-aware classifiers that incorporate neighboring states for better decision-making. Additionally, applying patches to the same positions across layers may not be optimal; developing adaptive strategies for layer and position selection could enhance effectiveness. Finally, expanding testing to a broader range of datasets and question types will be crucial to evaluate the method’s broader applicability.
+
+Auto Patch demonstrates potential in advancing the reasoning capabilities of language models, suggesting several avenues for further exploration and refinement.
+
+
+\section*{Acknowledgements}
+
+We would like to express our deepest gratitude to Dr. Mor Geva, Maor Ivgi, and Daniela Gottesman for their invaluable guidance and support throughout this project. Their insights and expertise have significantly contributed to the successful completion of our research.
+
+\section*{Limitations}
+While the Auto Patch method improves multi-hop reasoning, it has notable limitations. First, the SVM classifier's decisions are based on isolated hidden states, which may ignore broader context. Second, the method applies patches to identical positions across layers, limiting flexibility and potential optimization for different tasks.
+
+
+% Entries for the entire Anthology, followed by custom entries
+\bibliography{anthology,custom}
+\bibliographystyle{acl_natbib}
+
+
+
+\end{document}
