@@ -243,12 +243,14 @@ The classifier achieved an accuracy of 0.81. Table~\ref{tab:svm_report} provides
     \label{tab:svm_report}
 \end{table}
 
-As shown in Table~\ref{tab:svm_report}, The accuracy of the classifier was 0.81. While the overall precision and recall on the data after the preprocessing suggest acceptable performance. The classifier performed with high precision and recall for the 'False' class compared to the 'True' class, the majority class ('False') is predicted more accurately. On the real data, the model predicts \textit{True} for almost all positions. All samples have one or two positions that are not patched. Of these, 21.5\% are zero and the rest are distributed uniformly, as shown in Figure 1.
-\begin{figure}
+As shown in Table~\ref{tab:svm_report}, The accuracy of the classifier was 0.81. While the overall precision and recall on the data after the preprocessing suggest acceptable performance. The classifier performed with high precision and recall for the 'False' class compared to the 'True' class, the majority class ('False') is predicted more accurately. On the real data, the model predicts \textit{True} for almost all positions. All samples have one or two positions that are not patched. Most of positions that not patched, their tokens are: start of sentence symbol <s> (can come with the real prompt after it and many <unk> before it), or unknown symbol <unk> or single dot "." , as shown in Figure 2. The classifier learns the structure of the sentence and mostly does not patch the first token. Intuitively, we can view this as patching only the first token from layer 8 to layer 13. The intuition for patching most of the positions is that the second hop should influence the first hop in our dataset.
+
+
+\begin{figure}[!ht]
     \centering
-    \includegraphics[width=0.5\linewidth]{position_histogram.png}
-    \caption{Histogram showing the amount of patching by position number.}
-    \label{fig:enter-label}
+    \includegraphics[width=\columnwidth]{figures/Histogram showing the tokens of not patched position number.png}
+    \caption{Histogram showing the tokens of not patched position number.}
+    \vspace{-.5cm}
 \end{figure}
 
 \subsection{Discussion}
@@ -262,7 +264,7 @@ The effectiveness of the Auto Patch method can be attributed to several key fact
 
 \paragraph{Comparison with Random Classification} The classifier’s effectiveness is highlighted by its performance compared to a random classification baseline. The random classification serves as a control, demonstrating that the observed improvements are due to the targeted, learned patching strategy rather than arbitrary interventions. This comparison underscores the classifier's role as a learned, intelligent component in the Auto Patch framework.
 
-\paragraph{Optimal Layer Selection for Patching} The selection of layers for patching, particularly transferring information from higher (15th) to lower (8th) layers, aligns with the intuition that early layers capture more generalized, foundational knowledge. These layers encode broad representations crucial for maintaining context in multi-hop reasoning. Strategic injection of refined information into these early stages enhances the model's ability to integrate complex information, improving performance on multi-hop questions.
+\paragraph{Optimal Layer Selection for Patching} The selection of layers for patching, particularly transferring information from higher (15th) to lower (8th) layers, aligns with the intuition that early layers capture more basic and simple knowledge. These layers encode the basic representations crucial for maintaining context in multi-hop reasoning. Strategic injection of refined information into these early stages enhances the model's ability to integrate complex information, improving performance on multi-hop questions.
 
 Overall, the Auto Patch method's design and execution reflect a sophisticated approach to leveraging dynamic hidden state manipulation to bolster LLMs' reasoning capabilities. The combination of learned patching strategies and targeted computational enhancements offers a promising direction for advancing multi-hop reasoning in language models.
 
