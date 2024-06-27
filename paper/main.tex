@@ -94,7 +94,7 @@
 
 The field of natural language processing (NLP) has been profoundly transformed by the advent of large language models (LLMs) such as BERT \cite{devlin2019bert}, GPT-3 \cite{brown2020language}, and LLaMA \cite{touvron2023llama}. These models have set new benchmarks across a variety of tasks, significantly improving our ability to understand and generate human language. Despite these advancements, LLMs continue to face challenges in handling complex reasoning tasks, especially multi-hop questions, which require synthesizing information from multiple sources to arrive at a correct answer.
 
-Multi-hop reasoning involves answering questions that necessitate linking disparate pieces of information across different segments. For instance, a question might require first identifying a piece of data and then using that information to find the final answer. Traditional approaches to improving LLMs' performance on such tasks include:
+Multi-hop reasoning involves answering questions that necessitate linking disparate pieces of information across different segments. For instance, the question \textbf{``Who is the current CEO of the company that created Alexa?''} has two parts. Although a language model can easily know which company created Alexa (Amazon) and who the CEO of Amazon is, it can show difficulties answering the entire complex question. This might require first identifying a piece of data and then using that information to find the final answer. Traditional approaches to improving language models' performance on such tasks include:
 
 \begin{enumerate}
     \item \textbf{Chain-of-Thought (CoT) Prompting}: This method guides the model to generate explicit intermediate reasoning steps. CoT prompting helps break down complex problems into manageable steps, which significantly enhances performance on tasks like arithmetic and commonsense reasoning. However, CoT often demands extensive fine-tuning and precise prompt engineering, which can be computationally expensive and may not generalize well without considerable manual effort \cite{wei2023chainofthought}, \cite{zhang2022automatic}.
@@ -157,13 +157,10 @@ This comprehensive development and integration of patching code into the Auto Pa
 
 This section presents the experiments conducted to evaluate the effectiveness of our Auto Patch method. We provide a detailed description of the experimental setup, evaluation metrics, dataset characteristics, results, and comparative analysis with baseline and Chain-of-Thought (CoT) methods.
 
-\subsection{Evaluation Metrics}
+\subsection{Evaluation Metric}
 
 To evaluate the performance of our method, we utilized solve rate metric:
-
-\begin{itemize}
-    \item \textbf{Solve Rate}: The primary metric was the solve rate, defined as the proportion of correctly answered 2-hop questions out of the total questions.
-\end{itemize}
+The primary metric was the solve rate, defined as the proportion of correctly answered 2-hop questions out of the total questions.
 
 \subsection{Dataset Description}
 Our dataset contains 24,912 samples created from 1,024 prompts from MuSiQue \cite{deldjoo2021musique}. The structure of the prompts of MuSiQue is that the first hop uses the second hop, for example: "What award was received by the person who authored Missing Person?". Each sample representing a different execution of the Patchcopes method with patching from and to specific positions. For each prompt, we executed from source layer 15 to target layer 8, for each position in the prompt. The main features of each sample are: 'prompt\_source' and 'prompt\_target', the same and consist of a full two-hop question; 'position\_source' and 'position\_target', the same position that from and to; 'hop3', the correct answer to the two-hop question; 'generations\_patched', the LLM's response to the two-hop question; 'is\_correct\_patched', a boolean value indicating if the LLM generated the correct answer; and 'hidden\_rep', the hidden state patched during execution, represented as a float array of length 4096. 'hidden\_rep' is the input for the classifier, and 'is\_correct\_patched' is the label.
@@ -297,6 +294,22 @@ We would like to express our deepest gratitude to Dr. Mor Geva, Maor Ivgi, and D
 \section*{Limitations}
 While the Auto Patch method improves multi-hop reasoning, it has notable limitations. First, the SVM classifier's decisions are based on isolated hidden states, which may ignore broader context. Second, the method applies patches to identical positions across layers, limiting flexibility and potential optimization for different tasks.
 
+\section*{Future Work}
+\section{Future Work}
+
+To further enhance the capabilities of our Auto Patch method in improving multi-hop reasoning in large language models, we propose the following avenues for future research:
+
+\begin{enumerate}
+    \item \textbf{Context-Aware Classifier Development:} The effectiveness of our current classifier, which receives input from a single hidden state at a given layer and position, is somewhat limited by its narrow view of the model's internal state. There is a clear indication that the decision to patch or not is significantly influenced by the actions (i.e., patching decisions) of neighboring states. To address this, we propose developing a new classifier model that can view and analyze a broader range of hidden states simultaneously. By incorporating more contextual information, such as the states of neighboring positions and even other related layers, the classifier would make more informed decisions that consider the inter-dependencies of patching actions. We believe that such a context-aware approach will significantly refine the precision of our patching interventions and    lead to notable improvements in model performance.
+    
+    \item \textbf{Advanced Classifier and Learning Algorithms:} Current implementations utilize a classifier that makes patching decisions based on isolated hidden states at specific layers and positions. Recognizing the potential for more nuanced decision-making, we plan to explore more sophisticated machine learning algorithms. Future iterations could involve deep learning models that can capture complex dependencies in data, potentially increasing the accuracy and efficiency of the patching decisions.
+
+    \item \textbf{Optimization of Layer and Position Selection:} Our initial studies have highlighted the importance of selecting the appropriate layers and positions for effective patching. We intend to delve deeper into this aspect by investigating various strategies for selecting these parameters. This could involve developing heuristic algorithms or learning-based approaches that dynamically determine the most impactful layers and positions for patching, thereby maximizing the performance gains.
+
+    \item \textbf{Expansion to Diverse Datasets and Question Types:} While our current experiments have been conducted on the MuSiQue dataset focusing on 2-hop questions, the versatility and robustness of the Auto Patch method can be further validated by extending these experiments to include a broader range of datasets and question types. This expansion will help ascertain the generalizability of our method across different contexts and benchmarks in natural language processing.
+
+  
+\end{enumerate}
 
 % Entries for the entire Anthology, followed by custom entries
 \bibliography{anthology,custom}
