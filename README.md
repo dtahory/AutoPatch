@@ -4,7 +4,7 @@
 
 ## Abstract
 
-This repository contains the implementation of the Auto Patch method, a approach that leverages dynamic hidden state patching to enhance the multi-hop reasoning capabilities of LLMs. Using the PatchScopes framework, Auto Patch dynamically adjusts the model’s hidden states during inference to improve its ability to synthesize information across different steps. We evaluated our method on the MuSiQue dataset, focusing on 2-hop questions, and compared its performance against baseline and Chain-of-Thought (CoT) prompting methods. The results show that Auto Patch significantly outperforms the baseline.
+This repository contains the implementation of the Auto Patch method, an approach that leverages dynamic hidden state patching to enhance the multi-hop reasoning capabilities of LLMs. Using the PatchScopes framework, Auto Patch dynamically adjusts the model’s hidden states during inference to improve its ability to synthesize information across different steps. We evaluated our method on the MuSiQue dataset, focusing on 2-hop questions, and compared its performance against baseline and Chain-of-Thought (CoT) prompting methods. The results show that Auto Patch significantly outperforms the baseline.
 
 ## Table of Contents
 
